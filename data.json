@@ -1,9 +1,4 @@
 {
-  "sudo_users": [
-    7880781069
-  ],
-  "authorized_chats": [
-    -1002557637473
-  ],
-  "clones": {}
+  "sudo_users": [],
+  "authorized_chats": []
 }
