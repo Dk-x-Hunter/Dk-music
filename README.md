@@ -23,9 +23,11 @@ The assistant account joins the voice chat and plays audio from YouTube.
 🎮 Commands
 
 /play <song name>
+
 /play <YouTube URL>
 
 /queue
+
 /now
 
 /pause
@@ -40,18 +42,25 @@ Example
 The bot will:
 
 🔎 Search YouTube
+
        ↓
 🎵 Find the song
+
        ↓
 👤 Assistant joins VC
+
        ↓
 ▶️ Play audio
+
        ↓
 📋 Next songs go to queue
+
        ↓
 🔄 Automatically play next song
+
        ↓
 👋 Leave VC when queue is empty
+
 
 🔧 Environment Variables
 
