@@ -1,23 +1,14 @@
 import os
 
-# ==== Required ====
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-SESSION_STRING = os.getenv("ASSISTANT_SESSION") or os.getenv("STRING_SESSION")
+API_ID = int(os.environ["API_ID"])
+API_HASH = os.environ["API_HASH"]
 
-# ==== Ownership / access control ====
-MAIN_OWNER = int(os.getenv("OWNER_ID"))
-DEPLOYED_OWNER_ID = int(os.getenv("OWNER_ID"))
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+ASSISTANT_SESSION = os.environ["ASSISTANT_SESSION"]
 
-SUDO_USERS = [
-    int(user_id.strip())
-    for user_id in os.getenv("SUDO_USERS", "").split(",")
-    if user_id.strip()
-]
+OWNER_ID = int(os.environ["OWNER_ID"])
 
-# ==== Storage ====
-DB_FILE = os.path.join(os.path.dirname(__file__), "data.json")
+DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
+MAX_QUEUE = int(os.getenv("MAX_QUEUE", "25"))
 
-# ==== Clone system ====
-CLONE_ONLY_OWNER = os.getenv("CLONE_ONLY_OWNER", "true").lower() == "true"
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
