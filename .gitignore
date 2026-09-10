@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.env
+.env.*
+venv/
+.venv/
+
+downloads/
+*.session
+*.session-journal
+
+data.json
+
+.DS_Store
