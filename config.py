@@ -11,7 +11,7 @@ def env(name, default=None, required=False):
     if value is None or value.strip() == "":
         if required:
             raise RuntimeError(
-                f"Missing required environment variable: {name}"
+                f"Missing required environment variable: {name}"se
             )
         return default
 
@@ -184,25 +184,3 @@ def is_owner_or_sudo(
         or user_id in SUDO_USERS
     )
 
-GitHub Secrets required
-
-Keep these as Secrets, not inside the Python file:
-
-API_ID
-API_HASH
-BOT_TOKEN
-ASSISTANT_SESSION
-OWNER_ID
-
-Optional:
-
-SUDO_USERS
-YOUTUBE_COOKIES
-YOUTUBE_COOKIES_URL
-MONGO_URI
-MONGO_DB_NAME
-LOGGER_ID
-
-One correction from earlier: because "client.py" currently reads "ASSISTANT_SESSION"/"STRING_SESSION", this version deliberately supports both names.
-
-.
