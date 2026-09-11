@@ -1,0 +1,80 @@
+name: Dk Music Bot
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # =========================
+      # Checkout repository
+      # =========================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # =========================
+      # Setup Python
+      # =========================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      # =========================
+      # Install FFmpeg
+      # =========================
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+
+
+      # =========================
+      # Install Python packages
+      # =========================
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+
+      # =========================
+      # Start Dk Music
+      # =========================
+
+      - name: Start Dk Music
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ASSISTANT_SESSION: ${{ secrets.ASSISTANT_SESSION }}
+          OWNER_ID: ${{ secrets.OWNER_ID }}
+
+          SUDO_USERS: ${{ secrets.SUDO_USERS }}
+
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+          YOUTUBE_COOKIES_URL: ${{ secrets.YOUTUBE_COOKIES_URL }}
+
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MONGO_DB_NAME: ${{ secrets.MONGO_DB_NAME }}
+
+          LOGGER_ID: ${{ secrets.LOGGER_ID }}
+
+          DOWNLOAD_DIR: downloads
+          MAX_QUEUE: 20
+
+        run: |
+          python bot.py
