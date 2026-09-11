@@ -1,90 +1,364 @@
-import json
-import os
-import threading
+"""
+Optional MongoDB database for Dk Music.
 
-from config import DB_FILE, SUDO_USERS, OWNER_ID
+MongoDB is NOT required for the bot to play music.
 
-_lock = threading.Lock()
+If MONGO_URI is missing or MongoDB is unavailable:
+    - the bot continues running
+    - runtime data is kept locally in memory
+"""
 
-_DEFAULT = {
-    "sudo_users": list(set(SUDO_USERS + [OWNER_ID])),
-    "authorized_chats": [],   # groups where non-sudo members may control playback
-    "clones": {},             # {name: {"bot_token": ..., "added_by": user_id}}
-}
+import logging
+from typing import Any, Optional
 
-
-def _load():
-    if not os.path.exists(DB_FILE):
-        _save(_DEFAULT)
-        return dict(_DEFAULT)
-    with open(DB_FILE, "r") as f:
-        return json.load(f)
+from config import MONGO_URI, MONGO_DB_NAME
 
 
-def _save(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+LOGGER = logging.getLogger("DkMusic.Database")
 
 
-def get_db():
-    with _lock:
-        return _load()
+# ============================================================
+# MongoDB
+# ============================================================
+
+mongo_client = None
+database = None
+
+mongo_enabled = False
 
 
-def is_sudo(user_id: int) -> bool:
-    data = get_db()
-    return user_id in data["sudo_users"]
+def connect_mongodb() -> bool:
+    """
+    Try to connect to MongoDB.
+
+    Returns:
+        True  -> MongoDB is available
+        False -> MongoDB is unavailable/disabled
+    """
+
+    global mongo_client
+    global database
+    global mongo_enabled
+
+    # MongoDB is optional.
+    if not MONGO_URI:
+        LOGGER.info(
+            "MONGO_URI not configured. "
+            "Using local runtime storage."
+        )
+
+        mongo_enabled = False
+        return False
+
+    try:
+        from pymongo import MongoClient
+
+        mongo_client = MongoClient(
+            MONGO_URI,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+        )
+
+        # Force an actual connection test.
+        mongo_client.admin.command("ping")
+
+        database = mongo_client[
+            MONGO_DB_NAME
+        ]
+
+        mongo_enabled = True
+
+        LOGGER.info(
+            "MongoDB connected successfully."
+        )
+
+        return True
+
+    except Exception as exc:
+
+        mongo_client = None
+        database = None
+        mongo_enabled = False
+
+        LOGGER.warning(
+            "MongoDB unavailable. "
+            "Continuing without MongoDB: %s",
+            exc,
+        )
+
+        return False
 
 
-def add_sudo(user_id: int):
-    with _lock:
-        data = _load()
-        if user_id not in data["sudo_users"]:
-            data["sudo_users"].append(user_id)
-            _save(data)
+def close_mongodb():
+    """
+    Close MongoDB connection if one exists.
+    """
+
+    global mongo_client
+    global database
+    global mongo_enabled
+
+    if mongo_client:
+
+        try:
+            mongo_client.close()
+        except Exception:
+            pass
+
+    mongo_client = None
+    database = None
+    mongo_enabled = False
 
 
-def remove_sudo(user_id: int):
-    with _lock:
-        data = _load()
-        if user_id in data["sudo_users"] and user_id != OWNER_ID:
-            data["sudo_users"].remove(user_id)
-            _save(data)
+# ============================================================
+# Collection helper
+# ============================================================
+
+def get_collection(
+    name: str,
+):
+    """
+    Return a MongoDB collection.
+
+    Returns None if MongoDB is disabled.
+    """
+
+    if not mongo_enabled:
+        return None
+
+    if database is None:
+        return None
+
+    return database[name]
 
 
-def authorize_chat(chat_id: int):
-    with _lock:
-        data = _load()
-        if chat_id not in data["authorized_chats"]:
-            data["authorized_chats"].append(chat_id)
-            _save(data)
+# ============================================================
+# Generic document operations
+# ============================================================
+
+def get_document(
+    collection_name: str,
+    query: dict,
+) -> Optional[dict]:
+
+    collection = get_collection(
+        collection_name
+    )
+
+    if collection is None:
+        return None
+
+    try:
+        return collection.find_one(query)
+
+    except Exception as exc:
+
+        LOGGER.warning(
+            "MongoDB read failed: %s",
+            exc,
+        )
+
+        return None
 
 
-def unauthorize_chat(chat_id: int):
-    with _lock:
-        data = _load()
-        if chat_id in data["authorized_chats"]:
-            data["authorized_chats"].remove(chat_id)
-            _save(data)
+def set_document(
+    collection_name: str,
+    query: dict,
+    data: dict,
+) -> bool:
+
+    collection = get_collection(
+        collection_name
+    )
+
+    if collection is None:
+        return False
+
+    try:
+
+        collection.update_one(
+            query,
+            {
+                "$set": data,
+            },
+            upsert=True,
+        )
+
+        return True
+
+    except Exception as exc:
+
+        LOGGER.warning(
+            "MongoDB write failed: %s",
+            exc,
+        )
+
+        return False
 
 
-def is_authorized_chat(chat_id: int) -> bool:
-    return chat_id in get_db()["authorized_chats"]
+def delete_document(
+    collection_name: str,
+    query: dict,
+) -> bool:
+
+    collection = get_collection(
+        collection_name
+    )
+
+    if collection is None:
+        return False
+
+    try:
+
+        collection.delete_one(
+            query
+        )
+
+        return True
+
+    except Exception as exc:
+
+        LOGGER.warning(
+            "MongoDB delete failed: %s",
+            exc,
+        )
+
+        return False
 
 
-def add_clone(name: str, bot_token: str, added_by: int):
-    with _lock:
-        data = _load()
-        data["clones"][name] = {"bot_token": bot_token, "added_by": added_by}
-        _save(data)
+# ============================================================
+# Authorized chats
+# ============================================================
+
+def is_chat_authorized(
+    chat_id: int,
+) -> bool:
+
+    document = get_document(
+        "authorized_chats",
+        {
+            "_id": int(chat_id),
+        },
+    )
+
+    return document is not None
 
 
-def remove_clone(name: str):
-    with _lock:
-        data = _load()
-        data["clones"].pop(name, None)
-        _save(data)
+def authorize_chat(
+    chat_id: int,
+) -> bool:
+
+    return set_document(
+        "authorized_chats",
+        {
+            "_id": int(chat_id),
+        },
+        {
+            "chat_id": int(chat_id),
+        },
+    )
 
 
-def list_clones():
-    return get_db()["clones"]
+def unauthorize_chat(
+    chat_id: int,
+) -> bool:
+
+    return delete_document(
+        "authorized_chats",
+        {
+            "_id": int(chat_id),
+        },
+    )
+
+
+# ============================================================
+# Sudo users
+# ============================================================
+
+def is_sudo_user(
+    user_id: int,
+) -> bool:
+
+    document = get_document(
+        "sudo_users",
+        {
+            "_id": int(user_id),
+        },
+    )
+
+    return document is not None
+
+
+def add_sudo_user(
+    user_id: int,
+) -> bool:
+
+    return set_document(
+        "sudo_users",
+        {
+            "_id": int(user_id),
+        },
+        {
+            "user_id": int(user_id),
+        },
+    )
+
+
+def remove_sudo_user(
+    user_id: int,
+) -> bool:
+
+    return delete_document(
+        "sudo_users",
+        {
+            "_id": int(user_id),
+        },
+    )
+
+
+# ============================================================
+# Simple key/value storage
+# ============================================================
+
+def get_value(
+    key: str,
+    default: Any = None,
+) -> Any:
+
+    document = get_document(
+        "settings",
+        {
+            "_id": key,
+        },
+    )
+
+    if not document:
+        return default
+
+    return document.get(
+        "value",
+        default,
+    )
+
+
+def set_value(
+    key: str,
+    value: Any,
+) -> bool:
+
+    return set_document(
+        "settings",
+        {
+            "_id": key,
+        },
+        {
+            "value": value,
+        },
+    )
+
+
+# ============================================================
+# Start optional database
+# ============================================================
+
+connect_mongodb()
