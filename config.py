@@ -1,111 +1,172 @@
 import os
 
 
-def get_env(name: str, default=None, required: bool = False):
-    value = os.getenv(name, default)
+# ============================================================
+# Environment helper
+# ============================================================
 
-    if required and not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
+def env(name, default=None, required=False):
+    value = os.getenv(name)
 
-    return value
+    if value is None or value.strip() == "":
+        if required:
+            raise RuntimeError(
+                f"Missing required environment variable: {name}"
+            )
+        return default
+
+    return value.strip()
 
 
-# =========================
+# ============================================================
 # Telegram
-# =========================
+# ============================================================
 
-API_ID = int(get_env("API_ID", required=True))
-API_HASH = get_env("API_HASH", required=True)
-BOT_TOKEN = get_env("BOT_TOKEN", required=True)
+API_ID = int(env("API_ID", required=True))
 
-# Pyrogram assistant/user session.
-# Generate this separately and put it in GitHub Secrets.
-ASSISTANT_SESSION = get_env("ASSISTANT_SESSION", "")
+API_HASH = env(
+    "API_HASH",
+    required=True,
+)
 
-# Optional alternative name.
-STRING_SESSION = get_env("STRING_SESSION", "")
+BOT_TOKEN = env(
+    "BOT_TOKEN",
+    required=True,
+)
 
 
-# =========================
-# Owner / Sudo
-# =========================
+# ============================================================
+# Assistant Session
+# ============================================================
 
-OWNER_ID = int(get_env("OWNER_ID", required=True))
+ASSISTANT_SESSION = env(
+    "ASSISTANT_SESSION",
+    "",
+)
 
-_sudo_raw = get_env("SUDO_USERS", "")
+STRING_SESSION = env(
+    "STRING_SESSION",
+    "",
+)
 
-SUDO_USERS = set()
+# Support either secret name.
+SESSION_STRING = (
+    ASSISTANT_SESSION
+    or STRING_SESSION
+)
 
-if _sudo_raw:
-    for user_id in _sudo_raw.replace(",", " ").split():
+if not SESSION_STRING:
+    raise RuntimeError(
+        "Missing ASSISTANT_SESSION or STRING_SESSION."
+    )
+
+
+# ============================================================
+# Owner
+# ============================================================
+
+OWNER_ID = int(
+    env(
+        "OWNER_ID",
+        required=True,
+    )
+)
+
+
+# ============================================================
+# Sudo Users
+# ============================================================
+
+SUDO_USERS = {
+    OWNER_ID
+}
+
+sudo_raw = env(
+    "SUDO_USERS",
+    "",
+)
+
+if sudo_raw:
+    for item in sudo_raw.replace(
+        ",",
+        " ",
+    ).split():
+
         try:
-            SUDO_USERS.add(int(user_id))
+            SUDO_USERS.add(
+                int(item)
+            )
         except ValueError:
             pass
 
-# Owner is always sudo.
-SUDO_USERS.add(OWNER_ID)
+
+# ============================================================
+# YouTube
+# ============================================================
+
+YOUTUBE_COOKIES = env(
+    "YOUTUBE_COOKIES",
+    "",
+)
+
+YOUTUBE_COOKIES_URL = env(
+    "YOUTUBE_COOKIES_URL",
+    "",
+)
 
 
-# =========================
-# YouTube / yt-dlp
-# =========================
+# ============================================================
+# Music
+# ============================================================
 
-# Optional cookies file.
-#
-# Example:
-# YOUTUBE_COOKIES=/home/runner/work/Dk-music/cookies.txt
-#
-# Leave empty if cookies are not needed.
-YOUTUBE_COOKIES = get_env("YOUTUBE_COOKIES", "")
+DOWNLOAD_DIR = env(
+    "DOWNLOAD_DIR",
+    "downloads",
+)
 
-# Optional cookies URL.
-#
-# If supplied, the application can download the cookies file
-# before using yt-dlp.
-YOUTUBE_COOKIES_URL = get_env("YOUTUBE_COOKIES_URL", "")
+MAX_QUEUE = int(
+    env(
+        "MAX_QUEUE",
+        "20",
+    )
+)
 
-
-# =========================
-# Audio
-# =========================
-
-DOWNLOAD_DIR = get_env("DOWNLOAD_DIR", "downloads")
-
-MAX_QUEUE = int(get_env("MAX_QUEUE", "20"))
+os.makedirs(
+    DOWNLOAD_DIR,
+    exist_ok=True,
+)
 
 
-# =========================
+# ============================================================
 # Optional MongoDB
-# =========================
+# ============================================================
 
-# MongoDB is intentionally optional.
-#
-# If MONGO_URI is empty or MongoDB fails, the bot should continue
-# using local/in-memory state.
-MONGO_URI = get_env("MONGO_URI", "")
+MONGO_URI = env(
+    "MONGO_URI",
+    "",
+)
 
-MONGO_DB_NAME = get_env("MONGO_DB_NAME", "dkmusic")
-
-
-# =========================
-# Logging
-# =========================
-
-LOGGER_ID = int(get_env("LOGGER_ID", "0"))
+MONGO_DB_NAME = env(
+    "MONGO_DB_NAME",
+    "dkmusic",
+)
 
 
-# =========================
-# Runtime
-# =========================
+# ============================================================
+# Logger
+# ============================================================
 
-# Automatically create download directory.
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+LOGGER_ID = int(
+    env(
+        "LOGGER_ID",
+        "0",
+    )
+)
 
 
-# =========================
-# Helpers
-# =========================
+# ============================================================
+# Permission helpers
+# ============================================================
 
 def is_owner(user_id: int) -> bool:
     return user_id == OWNER_ID
@@ -113,3 +174,35 @@ def is_owner(user_id: int) -> bool:
 
 def is_sudo(user_id: int) -> bool:
     return user_id in SUDO_USERS
+
+
+def is_owner_or_sudo(
+    user_id: int,
+) -> bool:
+    return (
+        user_id == OWNER_ID
+        or user_id in SUDO_USERS
+    )
+
+GitHub Secrets required
+
+Keep these as Secrets, not inside the Python file:
+
+API_ID
+API_HASH
+BOT_TOKEN
+ASSISTANT_SESSION
+OWNER_ID
+
+Optional:
+
+SUDO_USERS
+YOUTUBE_COOKIES
+YOUTUBE_COOKIES_URL
+MONGO_URI
+MONGO_DB_NAME
+LOGGER_ID
+
+One correction from earlier: because "client.py" currently reads "ASSISTANT_SESSION"/"STRING_SESSION", this version deliberately supports both names.
+
+.
